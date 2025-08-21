@@ -10,6 +10,7 @@ test_result = {
     "title": "",
     "tester": "",
     "desc": "",
+    "reportPath": "",
     "cases": {},
     'rerun': 0,
     "failed": 0,
@@ -58,7 +59,7 @@ def handle_history_data(report_dir, test_result):
     try:
         with open(os.path.join(report_dir, 'history.json'), 'r', encoding='utf-8') as f:
             history = json.load(f)
-    except :
+    except:
         history = []
     history.append({'success': test_result['passed'],
                     'all': test_result['all'],
@@ -74,11 +75,14 @@ def handle_history_data(report_dir, test_result):
         json.dump(history, f, ensure_ascii=True)
     return history
 
+
 def pytest_sessionfinish(session):
     """在整个测试运行完成之后调用的钩子函数,可以在此处生成测试报告"""
     report2 = session.config.getoption('--report')
+    reportPath = session.config.getoption('--reportPath')
 
     if report2:
+        test_result['reportPath'] = reportPath or "reports"
         test_result['title'] = session.config.getoption('--title') or '测试报告'
         test_result['tester'] = session.config.getoption('--tester') or '小测试'
         test_result['desc'] = session.config.getoption('--desc') or '无'
@@ -92,11 +96,11 @@ def pytest_sessionfinish(session):
     else:
         file_name = time.strftime("%Y-%m-%d_%H_%M_%S") + name
 
-    if os.path.isdir('reports'):
+    if os.path.isdir(test_result['reportPath']):
         pass
     else:
-        os.mkdir('reports')
-    file_name = os.path.join('reports', file_name)
+        os.mkdir(test_result['reportPath'])
+    file_name = os.path.join(test_result['reportPath'], file_name)
     test_result["run_time"] = '{:.6f} S'.format(time.time() - test_result["start_time"])
     test_result['all'] = len(test_result['cases'])
     if test_result['all'] != 0:
@@ -104,7 +108,7 @@ def pytest_sessionfinish(session):
     else:
         test_result['pass_rate'] = 0
     # 保存历史数据
-    test_result['history'] = handle_history_data('reports', test_result)
+    test_result['history'] = handle_history_data(test_result['reportPath'], test_result)
     # 渲染报告
     template_path = os.path.join(os.path.dirname(__file__), './templates')
     env = Environment(loader=FileSystemLoader(template_path))
@@ -114,9 +118,9 @@ def pytest_sessionfinish(session):
     else:
         template = env.get_template('templates.html')
     report = template.render(test_result)
+    # print(file_name)
     with open(file_name, 'wb') as f:
         f.write(report.encode('utf8'))
-
 
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
@@ -136,6 +140,13 @@ def pytest_runtest_makereport(item, call):
 
 def pytest_addoption(parser):
     group = parser.getgroup("testreport")
+    group.addoption(
+        "--reportPath",
+        action="store",
+        metavar="path",
+        default=None,
+        help="create html report file at given path.",
+    )
     group.addoption(
         "--report",
         action="store",
